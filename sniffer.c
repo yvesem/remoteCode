@@ -16,8 +16,8 @@
 #include<unistd.h>
 
 FILE *logs;
-int tcp=0,udp=0,icmp=0,others=0,igmp=0,total=0,i=0,j;
-struct sockaddr_in source,dest;
+int tcp=0,udp=0,icmp=0,others=0,igmp=0,total=0,i;
+struct sockaddr_in source, dest;
 int size=0;
 unsigned char buffer[65536];
 
@@ -28,48 +28,40 @@ int protocol[6]={0,0,0,0,0,0};
 
 void ProtocolIdentifier (int proto){
 	switch(proto){
-	
 			case 1544:
-				fprintf(logs,"Protocol: ARP");
+				fprintf(logs,"Protocolo: ARP");
 				protocol[0]=protocol[0]+1;
 				break;
 				
 			case 13696:
-				fprintf(logs,"Protocol: RARP");
+				fprintf(logs,"Protocolo: RARP");
 				protocol[1]=protocol[1]+1;
 				break;
 				
 			case 8:
-				fprintf(logs,"Protocol: IPv4");
+				fprintf(logs,"Protocolo: IPv4");
 				protocol[2]=protocol[2]+1;
 				break;
 				
 			case 56710:
-				fprintf(logs,"Protocol: IPv6");
+				fprintf(logs,"Protocolo: IPv6");
 				protocol[3]=protocol[3]+1;
 				break;
 			
 			case 2184:
-				
-				fprintf(logs,"Flux Control");
+				fprintf(logs,"Control de flujo: ");
 				protocol[4]=protocol[4]+1;
-				
 				break;
 			
 			case 58760:
-				
 				fprintf(logs,"MAC Security");
 				protocol[5]=protocol[5]+1;
-				
 				break;
-				
 			default: 
 				fprintf(logs,"Unidentified");
 				protocol[6]=protocol[6]+1;
 	}
 }
-
-
 
 void PrintInHex(char *mesg, unsigned char *p, int len)
 {
@@ -87,30 +79,29 @@ void PrintInHex(char *mesg, unsigned char *p, int len)
 void ParseEthernetHeader(unsigned char *packet, int len)
 {
 	struct ethhdr *ethernet_header;
-
-	if(len >= 1536 /*len>=64 && len<=1500*/)
+	if(len >= 1536)
 	{
 		fprintf(logs,"---- Frame: %d ---- \n", frames_number);
 		eth2_frames++;
 		ethernet_header = (struct ethhdr *)packet;
 		
 		/* First set of 6 bytes are Destination MAC */
-		PrintInHex("Destination MAC: ", ethernet_header->h_dest, 6);
+		PrintInHex("MAC de destino: ", ethernet_header->h_dest, 6);
 		fprintf(logs,"\n");
 		
 		/* Second set of 6 bytes are Source MAC */
-		PrintInHex("Source MAC: ", ethernet_header->h_source, 6);
+		PrintInHex("MAC source: ", ethernet_header->h_source, 6);
 		fprintf(logs,"\n");
 
 		/* Last 2 bytes in the Ethernet header are the protocol it carries */
 		ProtocolIdentifier(ethernet_header->h_proto);
-		PrintInHex("\t Code: ",(void *)&ethernet_header->h_proto, 2);
+		PrintInHex("\t Protocolo empaquetado: ",(void *)&ethernet_header->h_proto, 2);
 		fprintf(logs,"\n");
 
 		/* Calculate frame's useful load */
 		usef_len = len - 18;
-		fprintf(logs,"Frame length in bytes: %d\n",len);
-		fprintf(logs,"Useful load in bytes: %d\n", usef_len);
+		fprintf(logs,"Tañano de la trama en bytes: %d\n",len);
+		fprintf(logs,"Carga util en bytes: %d \n", usef_len);
 		
 		fprintf(logs,"\n");
 
@@ -118,7 +109,7 @@ void ParseEthernetHeader(unsigned char *packet, int len)
 }
 
 void *capturador(void *args){
-    logs=fopen("sniffer.txt","a+");
+    logs = fopen("sniffer.txt","a+");
     if(logs==NULL) {
 	printf("Unable to create file.");
     }
@@ -127,9 +118,8 @@ void *capturador(void *args){
 }
 
 void *analizador(void *args){
-	//printf("\n analizador");
-	int num_pac=0;
-	char nom_tar[20];
+	int packet = 0;
+	char netC[10];
         int packet_size;
 	int i=0;
 	int saddr_size;
@@ -137,45 +127,42 @@ void *analizador(void *args){
 	struct sockaddr saddr;
 
 	printf("Numero de paquetes a capturar: \n");
-	scanf("%d",&num_pac);
+	scanf("%d",&packet);
 	
 	printf("Nombre de la tarjeta de red: \n");
-	scanf("%s",nom_tar);
+	scanf("%s",netC);
 
 	int sock = socket (PF_PACKET, SOCK_RAW, htons(ETH_P_ALL));
-	    if(sock == -1)
-	    {
-		//socket creation failed, may be because of non-root privileges
-		perror("Failed to create socket");
+	 if(sock == -1)
+	 {
+		perror("Error socket");
 		exit(1);
-	    }
+	 }
 
-	//Modo promiscuo de tarjeta de red.
 	struct ifreq ethreq;
-	strncpy (ethreq.ifr_name, nom_tar, IFNAMSIZ);
+	strncpy (ethreq.ifr_name, netC, IFNAMSIZ);
 	ioctl (sock,SIOCGIFFLAGS, &ethreq);
 	ethreq.ifr_flags |= IFF_PROMISC;
 	ioctl (sock, SIOCSIFFLAGS, &ethreq);
 	
-	while(i<num_pac) {
-	saddr_size = sizeof saddr;
-	size = recvfrom(sock , buffer , 65536, 0 , &saddr , &saddr_size);
+	while(i<packet) {
+		saddr_size = sizeof saddr;
+		size = recvfrom(sock , buffer , 65536, 0 , &saddr , &saddr_size);
 
-      	if (packet_size == -1) {
-        printf("Failed to get packets\n");
-        //return 1;
-      	}	
+      		if (packet_size == -1) {
+        		printf("NO se pudieron procesar los paquetes. \n");
+        		exit(1);
+      		}	
 
-	pthread_t hilo2; // hilo para proceso de capturas
-	pthread_create(&hilo2,NULL,capturador, NULL);
-	pthread_join(hilo2,NULL);
-
-	i=i+1;
+		pthread_t hilo2; // hilo para proceso de capturas
+		pthread_create(&hilo2,NULL,capturador, NULL);
+		pthread_join(hilo2,NULL);
+		i++;
 	}
+	
 	fprintf(logs,"Ethernet 2 frames: %d\n", eth2_frames);
 	fprintf(logs,"IEEE 802.3 frames: %d\n\n", frames_number-eth2_frames);
 }
-
 
 int main() {
 	
