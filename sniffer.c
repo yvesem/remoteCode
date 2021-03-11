@@ -8,23 +8,115 @@
 #include<arpa/inet.h>
 #include<netinet/ip.h>
 #include<linux/if_ether.h>
-#include<pthread.h>
-#include<netinet/ip_icmp.h>   
+#include<pthread.h> 
 #include<netinet/udp.h>   
 #include<netinet/tcp.h>  
 #include<netinet/ip.h>  
 #include<unistd.h>
-
+#define MAXBUF 65536
 FILE *logs;
-int tcp=0,udp=0,icmp=0,others=0,igmp=0,total=0,i;
+int size = 0;
 struct sockaddr_in source, dest;
-int size=0;
-unsigned char buffer[65536];
+unsigned char buffer[MAXBUF];
+int frames_number = 0;
+char netC[10];
+int eth2_frames = 0;
+int usef_len = 0;
+int protocol[6]={0};
+int addrType = 0; // 1 -> unidifusion 3 -> difusion 2 -> multidifusion
 
-int frames_number=0;
-int eth2_frames=0;
-int usef_len=0;
-int protocol[6]={0,0,0,0,0,0};
+void typeOfAddr() {
+	switch(addrType) {
+		case 1:
+			fprintf(logs," -> Direccion de unidifusion. \n");
+			break;
+		case 2:
+			fprintf(logs," -> Direccion de multidifusion \n");
+			break;
+		case 3:
+			fprintf(logs," -> Direccion de difusion \n");
+			break;
+		default:
+			fprintf(logs," -> No identificado \n");
+			break;
+	}
+}
+
+void HextoBin(unsigned char tByt) {
+	unsigned char symbol;
+	int j;
+	int bits[4];
+	for(j = 0; j < 2; j++) {
+		symbol = tByt;
+		if(symbol == '1')
+			bits[3] = 1;
+		if(symbol == '2')
+			bits[2] = 1;
+		if(symbol == '3')
+		{
+			bits[2] = 1;
+			bits[3] = 1;
+		}
+		if(symbol == '4')
+			bits[1] = 1;
+		if(symbol == '5')
+		{
+			bits[1] = 1;
+			bits[3] = 1;
+		}
+		if(symbol == '6')
+		{
+			bits[1]=1;
+			bits[2] = 1;
+		}
+		if(symbol == '7'){
+			bits[1] = 1;
+			bits[2] = 1;
+			bits[3] = 1;
+		}
+		if(symbol == '8')
+			bits[0] = 1;
+		if(symbol == '9'){
+			bits[0] = 1;
+			bits[3] = 1;
+		}
+		if(symbol == 'A') {
+			bits[0] = 1;
+			bits[2] = 1;
+		}
+		if(symbol == 'B')
+		{
+			bits[0] = 1;
+			bits[2] = 1;
+			bits[3] = 1;
+		}
+		if(symbol == 'C'){
+			bits[0]=1;
+			bits[1] = 1;
+		}
+		if(symbol == 'D'){
+			bits[0] = 1;
+			bits[1] = 1;
+			bits[3] = 1;
+		}
+		if(symbol == 'E'){
+			bits[0] = 1;
+			bits[1] = 1;
+			bits[2] = 1;
+		}
+		if(symbol == 'F') {
+			bits[0] = 1;
+			bits[1] = 1;
+			bits[2] = 1;
+			bits[3] = 1;
+		}
+	}
+	if(bits[3] == 1) {
+		addrType = 2;
+	} else {
+		addrType = 1;
+	}
+}
 
 void ProtocolIdentifier (int proto){
 	switch(proto){
@@ -67,13 +159,27 @@ void PrintInHex(char *mesg, unsigned char *p, int len)
 {
 	fprintf(logs,"%s",mesg);
 	len--;
+	int i = 1;
 	while(len)
 	{
+		if(*p == 'F' && i < 3)
+		{
+			addrType++; //difusion
+			i++;
+		} else
+		{
+			if(i < 3)
+			{
+				if(i==2){
+					HextoBin(*p);
+				}
+				i++;
+			}
+		}
 		fprintf(logs,"%.2X ", *p);
 		p++;
 		len--;
 	}
-
 }
 
 void ParseEthernetHeader(unsigned char *packet, int len)
@@ -85,22 +191,22 @@ void ParseEthernetHeader(unsigned char *packet, int len)
 		eth2_frames++;
 		ethernet_header = (struct ethhdr *)packet;
 		
-		/* First set of 6 bytes are Destination MAC */
 		PrintInHex("MAC de destino: ", ethernet_header->h_dest, 6);
 		fprintf(logs,"\n");
+		typeOfAddr();
 		
-		/* Second set of 6 bytes are Source MAC */
 		PrintInHex("MAC source: ", ethernet_header->h_source, 6);
 		fprintf(logs,"\n");
-
+		typeOfAddr();
+		
 		/* Last 2 bytes in the Ethernet header are the protocol it carries */
 		ProtocolIdentifier(ethernet_header->h_proto);
 		PrintInHex("\t Protocolo empaquetado: ",(void *)&ethernet_header->h_proto, 2);
 		fprintf(logs,"\n");
 
-		/* Calculate frame's useful load */
+		/* Carga util */
 		usef_len = len - 18;
-		fprintf(logs,"Tañano de la trama en bytes: %d\n",len);
+		fprintf(logs,"Tamaño (longitud) de la trama en bytes: %d\n",len);
 		fprintf(logs,"Carga util en bytes: %d \n", usef_len);
 		
 		fprintf(logs,"\n");
@@ -119,9 +225,8 @@ void *capturador(void *args){
 
 void *analizador(void *args){
 	int packet = 0;
-	char netC[10];
-        int packet_size;
-	int i=0;
+	int packet_size;
+	int i = 0;
 	int saddr_size;
 	struct sockaddr_in source_socket_address, dest_socket_address;
 	struct sockaddr saddr;
@@ -132,8 +237,8 @@ void *analizador(void *args){
 	printf("Nombre de la tarjeta de red: \n");
 	scanf("%s",netC);
 
-	int sock = socket (PF_PACKET, SOCK_RAW, htons(ETH_P_ALL));
-	 if(sock == -1)
+	int s = socket (PF_PACKET, SOCK_RAW, htons(ETH_P_ALL));
+	 if(s == -1)
 	 {
 		perror("Error socket");
 		exit(1);
@@ -141,22 +246,22 @@ void *analizador(void *args){
 
 	struct ifreq ethreq;
 	strncpy (ethreq.ifr_name, netC, IFNAMSIZ);
-	ioctl (sock,SIOCGIFFLAGS, &ethreq);
+	ioctl (s,SIOCGIFFLAGS, &ethreq);
 	ethreq.ifr_flags |= IFF_PROMISC;
-	ioctl (sock, SIOCSIFFLAGS, &ethreq);
+	ioctl (s, SIOCSIFFLAGS, &ethreq);
 	
+	printf("\n Analizando paquetes... \n");
 	while(i<packet) {
 		saddr_size = sizeof saddr;
-		size = recvfrom(sock , buffer , 65536, 0 , &saddr , &saddr_size);
+		size = recvfrom(s , buffer , 65536, 0 , &saddr , &saddr_size);
 
       		if (packet_size == -1) {
         		printf("NO se pudieron procesar los paquetes. \n");
         		exit(1);
       		}	
-
-		pthread_t hilo2; // hilo para proceso de capturas
-		pthread_create(&hilo2,NULL,capturador, NULL);
-		pthread_join(hilo2,NULL);
+		pthread_t captures; 
+		pthread_create(&captures,NULL,capturador, NULL);
+		pthread_join(captures,NULL);
 		i++;
 	}
 	
@@ -165,12 +270,12 @@ void *analizador(void *args){
 }
 
 int main() {
-	
-	pthread_t hilo1; // hilo para proceso de analisis
-	pthread_create(&hilo1,NULL,analizador,NULL);
-	pthread_join(hilo1,NULL);
-	system("/sbin/ifconfig enp0s3 -promisc");
+	pthread_t analize; 
+	pthread_create(&analize,NULL,analizador,NULL);
+	pthread_join(analize,NULL);
+	char command[50];
+	snprintf(command,sizeof(command),"/sbin/ifconfig %s -promisc",netC);
+	system(command);
 	
 	return 0;
-
 }
