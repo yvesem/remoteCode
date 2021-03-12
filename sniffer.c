@@ -9,20 +9,16 @@
 #include<netinet/ip.h>
 #include<linux/if_ether.h>
 #include<pthread.h> 
-#include<netinet/udp.h>   
-#include<netinet/tcp.h>  
-#include<netinet/ip.h>  
 #include<unistd.h>
 #define MAXBUF 65536
+
 FILE *logs;
 int size = 0;
 struct sockaddr_in source, dest;
 unsigned char buffer[MAXBUF];
-int frames_number = 0;
 char netC[10];
-int eth2_frames = 0;
-int usef_len = 0;
-int protocol[6]={0};
+int ethII = 0, frameLoad = 0, framesTotal = 0;;
+int protocolNxLayer[5]={0}; // 0 -> ARP 1 -> IPV6 2 -> IPV4 3 -> CONTROL DE FLUJO 4 -> MAC Sec.
 int addrType = 0; // 1 -> unidifusion 3 -> difusion 2 -> multidifusion
 
 void typeOfAddr() {
@@ -121,37 +117,32 @@ void HextoBin(unsigned char tByt) {
 void ProtocolIdentifier (int proto){
 	switch(proto){
 			case 1544:
-				fprintf(logs,"Protocolo: ARP");
-				protocol[0]=protocol[0]+1;
-				break;
-				
-			case 13696:
-				fprintf(logs,"Protocolo: RARP");
-				protocol[1]=protocol[1]+1;
+				fprintf(logs,"ARP ");
+				protocolNxLayer[0]++;
 				break;
 				
 			case 8:
-				fprintf(logs,"Protocolo: IPv4");
-				protocol[2]=protocol[2]+1;
+				fprintf(logs,"IPv4 ");
+				protocolNxLayer[1]++;
 				break;
 				
 			case 56710:
-				fprintf(logs,"Protocolo: IPv6");
-				protocol[3]=protocol[3]+1;
+				fprintf(logs,"IPv6 ");
+				protocolNxLayer[2]++;
 				break;
 			
 			case 2184:
-				fprintf(logs,"Control de flujo: ");
-				protocol[4]=protocol[4]+1;
+				fprintf(logs,"Control de flujo Ethernet ");
+				protocolNxLayer[3]++;
 				break;
 			
 			case 58760:
-				fprintf(logs,"MAC Security");
-				protocol[5]=protocol[5]+1;
+				fprintf(logs,"Seguridad MAC ");
+				protocolNxLayer[4]++;
 				break;
 			default: 
-				fprintf(logs,"Unidentified");
-				protocol[6]=protocol[6]+1;
+				fprintf(logs,"No identificado ");
+				protocolNxLayer[5]++;
 	}
 }
 
@@ -187,40 +178,41 @@ void ParseEthernetHeader(unsigned char *packet, int len)
 	struct ethhdr *ethernet_header;
 	if(len >= 1536)
 	{
-		fprintf(logs,"---- Frame: %d ---- \n", frames_number);
-		eth2_frames++;
+		fprintf(logs,"---- Frame: %d ---- \n", framesTotal);
+		ethII++;
+		fprintf(logs,"Trama Ethernet II. \n");
 		ethernet_header = (struct ethhdr *)packet;
 		
 		PrintInHex("MAC de destino: ", ethernet_header->h_dest, 6);
 		fprintf(logs,"\n");
 		typeOfAddr();
 		
-		PrintInHex("MAC source: ", ethernet_header->h_source, 6);
+		PrintInHex("MAC de la fuente: ", ethernet_header->h_source, 6);
 		fprintf(logs,"\n");
 		typeOfAddr();
 		
-		/* Last 2 bytes in the Ethernet header are the protocol it carries */
 		ProtocolIdentifier(ethernet_header->h_proto);
 		PrintInHex("\t Protocolo empaquetado: ",(void *)&ethernet_header->h_proto, 2);
 		fprintf(logs,"\n");
 
-		/* Carga util */
-		usef_len = len - 18;
+		frameLoad = len - 18;
 		fprintf(logs,"Tamaño (longitud) de la trama en bytes: %d\n",len);
-		fprintf(logs,"Carga util en bytes: %d \n", usef_len);
-		
+		fprintf(logs,"Carga util en bytes: %d \n", frameLoad);
 		fprintf(logs,"\n");
-
+	}
+	else {
+		fprintf(logs," ---- Frame: %d ---- \n", framesTotal);
+		fprintf(logs,"Trama IEEE 802.3 no puede ser analizada. \n");
 	}
 }
 
 void *capturador(void *args){
     logs = fopen("sniffer.txt","a+");
     if(logs==NULL) {
-	printf("Unable to create file.");
+	printf("\n Error al abrir el archivo. ");
     }
     ParseEthernetHeader(buffer, size);
-    frames_number++;
+    framesTotal++;
 }
 
 void *analizador(void *args){
@@ -246,15 +238,14 @@ void *analizador(void *args){
 
 	struct ifreq ethreq;
 	strncpy (ethreq.ifr_name, netC, IFNAMSIZ);
-	ioctl (s,SIOCGIFFLAGS, &ethreq);
+	ioctl(s,SIOCGIFFLAGS, &ethreq);
 	ethreq.ifr_flags |= IFF_PROMISC;
-	ioctl (s, SIOCSIFFLAGS, &ethreq);
+	ioctl(s, SIOCSIFFLAGS, &ethreq);
 	
 	printf("\n Analizando paquetes... \n");
 	while(i<packet) {
 		saddr_size = sizeof saddr;
-		size = recvfrom(s , buffer , 65536, 0 , &saddr , &saddr_size);
-
+		size = recvfrom(s , buffer , MAXBUF, 0 , &saddr , &saddr_size);
       		if (packet_size == -1) {
         		printf("NO se pudieron procesar los paquetes. \n");
         		exit(1);
@@ -264,9 +255,11 @@ void *analizador(void *args){
 		pthread_join(captures,NULL);
 		i++;
 	}
-	
-	fprintf(logs,"Ethernet 2 frames: %d\n", eth2_frames);
-	fprintf(logs,"IEEE 802.3 frames: %d\n\n", frames_number-eth2_frames);
+	fprintf(logs,"Totales: \n");
+	fprintf(logs,"Tramas Ethernet II: %d\n", ethII);
+	fprintf(logs,"ARP: %d IPv4: %d IPv6: %d Control de flujo: %d Seguridad MAC: %d Otro: %d \n",protocolNxLayer[0],protocolNxLayer[1],protocolNxLayer[2],protocolNxLayer[3],protocolNxLayer[4],protocolNxLayer[5]);
+	int ieeeDot = framesTotal - ethII; 
+	fprintf(logs,"Tramas IEEE 802.3 (no analizadas): %d\n\n", ieeeDot);
 }
 
 int main() {
@@ -276,6 +269,6 @@ int main() {
 	char command[50];
 	snprintf(command,sizeof(command),"/sbin/ifconfig %s -promisc",netC);
 	system(command);
-	
+	printf("\n Analisis terminado. \n Registros en: sniffer.txt \n");
 	return 0;
 }
