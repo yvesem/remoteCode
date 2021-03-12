@@ -13,13 +13,72 @@
 #define MAXBUF 65536
 
 FILE *logs;
+FILE *macA;
 int size = 0;
 struct sockaddr_in source, dest;
 unsigned char buffer[MAXBUF];
 char netC[10];
 int ethII = 0, frameLoad = 0, framesTotal = 0;;
-int protocolNxLayer[5]={0}; // 0 -> ARP 1 -> IPV6 2 -> IPV4 3 -> CONTROL DE FLUJO 4 -> MAC Sec.
+int protocolNxLayer[6]={0}; // 0 -> ARP 1 -> IPV6 2 -> IPV4 3 -> CONTROL DE FLUJO 4 -> MAC Sec.
 int addrType = 0; // 1 -> unidifusion 3 -> difusion 2 -> multidifusion
+
+typedef struct listaMACs{
+	char dirc[30];
+	struct listaMACs *sig;
+	struct listaMACs *ant;
+}addrMAC;
+
+addrMAC *crear(char *direc)
+{
+	addrMAC *nuevo;
+	nuevo = (addrMAC*)malloc(sizeof(nuevo));
+	memcpy(nuevo->dirc,direc,strlen(direc)+1);
+	nuevo->sig = NULL;
+	nuevo->ant = NULL;
+	return nuevo;
+}
+
+addrMAC *pushF(addrMAC *inicio,char *direc) {
+	addrMAC *nuevo;
+	if(inicio == NULL) {
+		inicio = crear(direc);
+		return inicio;
+	} else {
+		nuevo = crear(direc);
+		nuevo->sig = inicio;
+		inicio->ant = nuevo;
+		inicio = nuevo;
+	}
+	return inicio;
+}
+
+addrMAC *pushL(addrMAC *first, char *direc) {
+	addrMAC *nuevo, *aux;
+	nuevo = crear(direc);
+	if(first == NULL) {
+		first = pushF(first,direc);
+		return first;
+	} else {
+		aux = first;
+		while(aux->sig!=NULL) {
+			aux = aux->sig;
+		}
+		aux->sig = nuevo;
+		nuevo = aux;
+		return first;
+	}
+}
+// para analisis de como se harán las siguiente operaciones
+void mostrar(addrMAC *inicio)
+{
+	addrMAC *aux;
+	aux = inicio;
+	while(aux!=NULL) {
+		printf("\n direccion MAC guardada %.2X", *aux->dirc);
+		aux = aux->sig;
+	}
+}
+addrMAC *listaMAC = NULL;
 
 void typeOfAddr() {
 	switch(addrType) {
@@ -38,12 +97,12 @@ void typeOfAddr() {
 	}
 }
 
-void HextoBin(unsigned char tByt) {
+void HextoBin(unsigned char tByt[2]) {
 	unsigned char symbol;
 	int j;
 	int bits[4];
 	for(j = 0; j < 2; j++) {
-		symbol = tByt;
+		symbol = tByt[j];
 		if(symbol == '1')
 			bits[3] = 1;
 		if(symbol == '2')
@@ -114,34 +173,34 @@ void HextoBin(unsigned char tByt) {
 	}
 }
 
-void ProtocolIdentifier (int proto){
-	switch(proto){
+void ProtocolType (int typeOf){
+	switch(typeOf){
 			case 1544:
-				fprintf(logs,"ARP ");
+				fprintf(logs,"ARP \n");
 				protocolNxLayer[0]++;
 				break;
 				
 			case 8:
-				fprintf(logs,"IPv4 ");
+				fprintf(logs,"IPv4 \n");
 				protocolNxLayer[1]++;
 				break;
 				
 			case 56710:
-				fprintf(logs,"IPv6 ");
+				fprintf(logs,"IPv6 \n");
 				protocolNxLayer[2]++;
 				break;
 			
 			case 2184:
-				fprintf(logs,"Control de flujo Ethernet ");
+				fprintf(logs,"Control de flujo Ethernet \n");
 				protocolNxLayer[3]++;
 				break;
 			
 			case 58760:
-				fprintf(logs,"Seguridad MAC ");
+				fprintf(logs,"Seguridad MAC \n");
 				protocolNxLayer[4]++;
 				break;
 			default: 
-				fprintf(logs,"No identificado ");
+				fprintf(logs,"No identificado \n");
 				protocolNxLayer[5]++;
 	}
 }
@@ -150,24 +209,28 @@ void PrintInHex(char *mesg, unsigned char *p, int len)
 {
 	fprintf(logs,"%s",mesg);
 	len--;
+	unsigned char dif[2] = "FF";
 	int i = 1;
+	int j = 0;
+	int h;
 	while(len)
 	{
-		if(*p == 'F' && i < 3)
+		if(*p == *dif && i < 3)
 		{
 			addrType++; //difusion
-			i++;
+			i = 3;
 		} else
 		{
 			if(i < 3)
 			{
 				if(i==2){
-					HextoBin(*p);
+					HextoBin(p);
 				}
 				i++;
 			}
 		}
 		fprintf(logs,"%.2X ", *p);
+		fprintf(macA,"%.2X ", *p);
 		p++;
 		len--;
 	}
@@ -185,13 +248,15 @@ void ParseEthernetHeader(unsigned char *packet, int len)
 		
 		PrintInHex("MAC de destino: ", ethernet_header->h_dest, 6);
 		fprintf(logs,"\n");
+		fprintf(macA,"\n");
 		typeOfAddr();
 		
 		PrintInHex("MAC de la fuente: ", ethernet_header->h_source, 6);
 		fprintf(logs,"\n");
+		fprintf(macA,"\n");
 		typeOfAddr();
 		
-		ProtocolIdentifier(ethernet_header->h_proto);
+		ProtocolType(ethernet_header->h_proto);
 		PrintInHex("\t Protocolo empaquetado: ",(void *)&ethernet_header->h_proto, 2);
 		fprintf(logs,"\n");
 
@@ -208,6 +273,7 @@ void ParseEthernetHeader(unsigned char *packet, int len)
 
 void *capturador(void *args){
     logs = fopen("sniffer.txt","a+");
+    macA = fopen("direccionesMAC.txt","w+");
     if(logs==NULL) {
 	printf("\n Error al abrir el archivo. ");
     }
@@ -269,6 +335,7 @@ int main() {
 	char command[50];
 	snprintf(command,sizeof(command),"/sbin/ifconfig %s -promisc",netC);
 	system(command);
+	mostrar(listaMAC);
 	printf("\n Analisis terminado. \n Registros en: sniffer.txt \n");
 	return 0;
 }
