@@ -23,6 +23,7 @@ int protocolNxLayer[6]={0}; // 0 -> ARP 1 -> IPV6 2 -> IPV4 3 -> CONTROL DE FLUJ
 int addrType = 0; // 1 -> unidifusion 3 -> difusion 2 -> multidifusion
 int isMAC = 0;
 
+
 void typeOfAddr() {
 	switch(addrType) {
 		case 1:
@@ -245,7 +246,7 @@ void *analizador(void *args){
 	int s = socket (PF_PACKET, SOCK_RAW, htons(ETH_P_ALL));
 	 if(s == -1)
 	 {
-		perror("Error socket");
+		perror("Error en socket");
 		exit(1);
 	 }
 
@@ -282,6 +283,7 @@ int main() {
 	char command[50];
 	snprintf(command,sizeof(command),"/sbin/ifconfig %s -promisc",netC);
 	system(command);
+	printf("\n Haciendo recuentos... \n");
 	printf("\n Analisis terminado. \n Registros en: sniffer.txt \n");
 	return 0;
 }
