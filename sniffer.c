@@ -88,6 +88,7 @@ void mostrar(Nodo *inicio) {
 		fprintf(logs,"\n %s repetido %d veces. ", aux->addMAC, aux->cantidad);
 		aux = aux->sig;
 	}
+	fprintf(logs,"\n ");
 }
 
 void HextoBin(char tByt[18]) {
@@ -140,7 +141,7 @@ void ParseEthernetHeader(unsigned char *packet, int len)
 	struct ethhdr *ethernet_header;
 	if(len >= 1536)
 	{
-		fprintf(logs,"---- Frame: %d ---- \n", framesTotal);
+		fprintf(logs,"--------------- Frame: %d --------------- \n", framesTotal);
 		ethII++;
 		fprintf(logs,"***** Trama Ethernet II. *****");
 		ethernet_header = (struct ethhdr *)packet;
