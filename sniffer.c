@@ -13,14 +13,11 @@
 #define MAXBUF 65536
 
 FILE *logs;
-int size = 0;
-struct sockaddr_in source, dest;
 unsigned char buffer[MAXBUF];
 char netC[10];
-int ethII = 0, frameLoad = 0, framesTotal = 0;
+int ethII = 0, frameLoad = 0, framesTotal = 0, size = 0;
 int protocolNxLayer[6] = {0}; // 0 -> ARP 1 -> IPV6 2 -> IPV4 3 -> CONTROL DE FLUJO 4 -> MAC Sec.
-char direccionDest[18];
-char direccionOrig[18];
+char direccionDest[18], direccionOrig[18];
 uint16_t protocolo;
 
 typedef struct _Nodo {
@@ -111,26 +108,26 @@ void ProtocolType (int typeOf){
 				break;	
 				
 			case 8:
-				fprintf(logs,"******IPv4******");
+				fprintf(logs,"******IPv4******\n");
 				protocolNxLayer[1]++;
 				break;
 				
 			case 56710:
-				fprintf(logs,"******IPv6*******");
+				fprintf(logs,"******IPv6*******\n");
 				protocolNxLayer[2]++;
 				break;
 				
 			case 2184:
-				fprintf(logs,"******Control de flujo Ethernet*****");
+				fprintf(logs,"******Control de flujo Ethernet*****\n");
 				protocolNxLayer[3]++;
 				break;
 			
 			case 58760:
-				fprintf(logs,"*******Seguridad MAC******");
+				fprintf(logs,"*******Seguridad MAC******\n");
 				protocolNxLayer[4]++;
 				break;
 			default: 
-				fprintf(logs,"********No identificado********");
+				fprintf(logs,"********No identificado********\n");
 				protocolNxLayer[5]++;
 				break;
 	}
@@ -182,10 +179,8 @@ void *capturador(void *args){
 }
 
 void *analizador(void *args){
-	int packet = 0;
+	int packet = 0, i = 0;
 	int packet_size, saddr_size;
-	int i = 0;
-	struct sockaddr_in source_socket_address, dest_socket_address;
 	struct sockaddr saddr;
 
 	printf("Numero de paquetes a capturar: \n");
