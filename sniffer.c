@@ -100,29 +100,29 @@ void HextoBin(char tByt[18]) {
 	}
 }
 
-void ProtocolType (int typeOf){
+void ProtocolType (uint16_t typeOf){
 	switch(typeOf){
-			case 1544:
+			case 2054:
 				fprintf(logs,"******ARP******\n");
 				protocolNxLayer[0]++;
 				break;	
 				
-			case 8:
+			case 2048:
 				fprintf(logs,"******IPv4******\n");
 				protocolNxLayer[1]++;
 				break;
 				
-			case 56710:
+			case 34525:
 				fprintf(logs,"******IPv6*******\n");
 				protocolNxLayer[2]++;
 				break;
 				
-			case 2184:
+			case 34824:
 				fprintf(logs,"******Control de flujo Ethernet*****\n");
 				protocolNxLayer[3]++;
 				break;
 			
-			case 58760:
+			case 35045:
 				fprintf(logs,"*******Seguridad MAC******\n");
 				protocolNxLayer[4]++;
 				break;
@@ -136,7 +136,7 @@ void ProtocolType (int typeOf){
 void ParseEthernetHeader(unsigned char *packet, int len)
 {
 	struct ethhdr *ethernet_header;
-	if(len >= 1536)
+	if(len >= 45)
 	{
 		fprintf(logs,"--------------- Frame: %d --------------- \n", framesTotal);
 		ethII++;
@@ -153,8 +153,8 @@ void ParseEthernetHeader(unsigned char *packet, int len)
 		HextoBin(direccionOrig);
 		direcc = alta_inicio(direcc,direccionOrig);
 		
-		ProtocolType(ethernet_header->h_proto);
 		protocolo = htons(ethernet_header->h_proto);
+		ProtocolType(protocolo);
 		fprintf(logs,"\nProtocolo: 0x%04X ", protocolo);
 		fprintf(logs,"\n");
 
@@ -164,7 +164,7 @@ void ParseEthernetHeader(unsigned char *packet, int len)
 		fprintf(logs,"\n");
 	}
 	else {
-		fprintf(logs," ---- Frame: %d ---- \n", framesTotal);
+		fprintf(logs," ---------------- Frame: %d ------------- \n", framesTotal);
 		fprintf(logs,"Trama IEEE 802.3 no puede ser analizada. \n");
 	}
 }
