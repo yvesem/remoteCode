@@ -180,7 +180,7 @@ void *capturador(void *args){
 
 void *analizador(void *args){
 	int packet = 0, i = 0;
-	int packet_size, saddr_size;
+	int saddr_size;
 	struct sockaddr saddr;
 
 	printf("Numero de paquetes a capturar: \n");
@@ -205,11 +205,7 @@ void *analizador(void *args){
 	printf("\n Analizando paquetes... \n");
 	while(i<packet) {
 		saddr_size = sizeof saddr;
-		size = recvfrom(s, buffer, MAXBUF, 0 , &saddr , &saddr_size);
-      		if (packet_size == -1) {
-        		printf("NO se pudieron procesar los paquetes. \n");
-        		exit(1);
-      		}	
+		size = recvfrom(s, buffer, MAXBUF, 0 , &saddr , &saddr_size);	
 		pthread_t captures; 
 		pthread_create(&captures,NULL,capturador, NULL);
 		pthread_join(captures,NULL);
